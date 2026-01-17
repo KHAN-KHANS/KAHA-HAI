@@ -18,30 +18,35 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 BLUE = "\033[94m"
 CYAN = "\033[96m"
+WHITE = "\033[97m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
-def animated_print(text, delay=0.01, color=GREEN):
+def animated_print(text, delay=0.02, color=GREEN):
+    """Stylish typewriter effect."""
     for char in text:
         sys.stdout.write(color + char + RESET)
         sys.stdout.flush()
         time.sleep(delay)
     print()
 
-def loading_animation(duration=2, label="GENERATING DATA"):
-    chars = ["⠙", "⠘", "⠰", "⠴", "⠤", "⠦", "⠆", "⠃", "⠋", "⠉"]
+def loading_animation(duration=3, label="PROCESSING"):
+    """Matrix style loading bar."""
+    chars = ["█", "▒", "░", "█"]
     end_time = time.time() + duration
     while time.time() < end_time:
         for char in chars:
-            sys.stdout.write(f"\r{CYAN}[{char}] {BOLD}{label}{RESET}")
+            percent = random.randint(10, 99)
+            sys.stdout.write(f"\r{CYAN}[{char}] {BOLD}{label}... {percent}%{RESET}")
             sys.stdout.flush()
-            time.sleep(0.08)
+            time.sleep(0.1)
     sys.stdout.write("\r" + " " * 60 + "\r")
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def show_logo():
+    clear_screen()
     logo = f"""
 {CYAN}     ███╗   ██╗ █████╗ ██████╗ ███████╗███████╗███╗   ███╗
 {BLUE}     ████╗  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝████╗ ████║
@@ -49,7 +54,7 @@ def show_logo():
 {YELLOW}     ██║╚██╗██║██╔══██║██║  ██║██╔══╝  ██╔══╝  ██║╚██╔╝██║
 {RED}     ██║ ╚████║██║  ██║██████╔╝███████╗███████╗██║ ╚═╝ ██║
 {CYAN}     ╚═╝  ╚═══╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝╚═╝     ╚═╝
-{BOLD}{WHITE}                [ TOKEN GRENADE V7 - ADVANCED ]             {RESET}"""
+{BOLD}{WHITE}             [ TOKEN GRENADE V7 - BY ALIYA×NADEEM ]             {RESET}"""
     print(logo)
     print(GREEN + "═" * 62 + RESET)
 
@@ -65,7 +70,7 @@ except ImportError:
     exit()
 
 # ==========================================
-# CORE LOGIC
+# CORE FACEBOOK LOGIC
 # ==========================================
 
 class FacebookPasswordEncryptor:
@@ -106,7 +111,7 @@ class FacebookPasswordEncryptor:
         buf.write(enc_pass)
         return f"#PWD_FB4A:2:{ts}:{base64.b64encode(buf.getvalue()).decode()}"
 
-class FacebookAppTokens:
+class FacebookLogin:
     APPS = {
         'FB_ANDROID': '350685531728',
         'MESSENGER': '256002347743983',
@@ -114,9 +119,9 @@ class FacebookAppTokens:
         'ADS_MANAGER': '438142079694454'
     }
 
-class FacebookLogin:
     def __init__(self, identifier, password):
         self.identifier = identifier
+        self.raw_password = password
         self.password = FacebookPasswordEncryptor.encrypt(password)
         self.session = requests.Session()
         self.device_id = str(uuid.uuid4())
@@ -129,20 +134,12 @@ class FacebookLogin:
             "user-agent": "Dalvik/2.1.0 (Linux; U; Android 9; Redmi Build/PQ3A.190705.08211809) [FBAN/FB4A;FBAV/417.0.0.33.65;FBPN/com.facebook.katana;FBLC/vi_VN;FBBV/480086274;]"
         }
 
-    def _convert(self, token, target_id):
-        try:
-            r = self.session.post('https://api.facebook.com/method/auth.getSessionforApp', data={
-                'access_token': token, 'format': 'json', 'new_app_id': target_id, 'generate_session_cookies': '1'
-            }).json()
-            return r.get('access_token')
-        except: return None
-
     def handle_2fa(self, error_data):
+        """Infinite loop for 2FA selection and verification."""
         while True:
-            clear_screen()
             show_logo()
             print(f"{RED}╔════════════════════════════════════════════════════════════╗")
-            print(f"{RED}║ {BOLD}SECURITY CHECK: TWO-FACTOR AUTHENTICATION REQUIRED {RESET}{RED}      ║")
+            print(f"{RED}║ {BOLD}{WHITE}SECURITY CHECK: TWO-FACTOR AUTHENTICATION REQUIRED {RESET}{RED}      ║")
             print(f"{RED}╚════════════════════════════════════════════════════════════╝{RESET}")
             print(f"{CYAN}[1]{RESET} Get code via {GREEN}WhatsApp{RESET}")
             print(f"{CYAN}[2]{RESET} Get code via {GREEN}SMS (Mobile Number){RESET}")
@@ -152,39 +149,47 @@ class FacebookLogin:
             
             choice = input(f"{YELLOW}SELECT OPTION ➠ {RESET}").strip()
             
-            if choice == '0': exit()
+            if choice == '0': sys.exit()
             if choice in ['1', '2', '3']:
-                method = ["WhatsApp", "SMS", "Email"][int(choice)-1]
-                animated_print(f"[*] Requesting code via {method}...", color=CYAN)
+                methods = ["WhatsApp", "SMS", "Email"]
+                selected_method = methods[int(choice)-1]
+                
+                animated_print(f"[*] Requesting OTP link via {selected_method}...", color=CYAN)
                 loading_animation(2, "SENDING REQUEST")
                 
                 print(GREEN + "═" * 62 + RESET)
-                otp = input(f"{YELLOW}ENTER THE CODE RECEIVED ➠ {RESET}").strip()
+                otp_code = input(f"{YELLOW}ENTER 6-DIGIT CODE RECEIVED ➠ {RESET}").strip()
                 
-                loading_animation(2, "VERIFYING OTP")
+                loading_animation(2, "VERIFYING CODE")
                 
+                # Verification attempt
                 data_2fa = {
                     'format': 'json', 'email': self.identifier, 'device_id': self.device_id,
                     'access_token': "350685531728|62f8ce9f74b12f84c123cc23437a4a32",
-                    'generate_session_cookies': 'true', 'twofactor_code': otp,
+                    'generate_session_cookies': 'true', 'twofactor_code': otp_code,
                     'credentials_type': 'two_factor', 'userid': error_data['uid'],
-                    'machine_id': self.machine_id, 'password': self.password
+                    'machine_id': self.machine_id, 'password': self.password,
+                    'first_factor': error_data.get('login_first_factor')
                 }
                 
-                res = self.session.post("https://b-graph.facebook.com/auth/login", data=data_2fa, headers=self._get_headers()).json()
-                
-                if 'access_token' in res:
-                    return res
-                else:
-                    animated_print(f"[!] FAILED: {res.get('error', {}).get('message', 'Invalid Code')}", color=RED)
+                try:
+                    res = self.session.post("https://b-graph.facebook.com/auth/login", data=data_2fa, headers=self._get_headers()).json()
+                    if 'access_token' in res:
+                        return res
+                    else:
+                        print(f"{RED}[!] ERROR: {res.get('error', {}).get('message', 'Wrong Code')}{RESET}")
+                        time.sleep(2)
+                except Exception as e:
+                    print(f"{RED}[!] Connection Error: {e}{RESET}")
                     time.sleep(2)
             else:
-                print(f"{RED}Invalid Option! Try again.{RESET}")
+                print(f"{RED}[!] Invalid Choice. Try Again.{RESET}")
                 time.sleep(1)
 
-    def login(self):
-        animated_print("[*] INITIALIZING SECURE LOGIN...", color=CYAN)
-        loading_animation(2, "CONNECTING TO SERVER")
+    def login_process(self):
+        """Initial login attempt."""
+        animated_print("[*] SECURE CONNECTION ESTABLISHED...", color=CYAN)
+        loading_animation(2, "INJECTING PAYLOAD")
         
         data = {
             "format": "json", "email": self.identifier, "password": self.password,
@@ -193,23 +198,40 @@ class FacebookLogin:
             "access_token": "350685531728|62f8ce9f74b12f84c123cc23437a4a32"
         }
         
-        response = self.session.post("https://b-graph.facebook.com/auth/login", data=data, headers=self._get_headers()).json()
-        
-        if 'access_token' in response:
-            return response
-        
-        if 'error' in response:
-            error_data = response.get('error', {}).get('error_data', {})
-            if 'login_first_factor' in error_data:
-                return self.handle_2fa(error_data)
-        
-        return response
+        try:
+            response = self.session.post("https://b-graph.facebook.com/auth/login", data=data, headers=self._get_headers()).json()
+            
+            if 'access_token' in response:
+                return response
+            
+            if 'error' in response:
+                err_data = response.get('error', {}).get('error_data', {})
+                if 'login_first_factor' in err_data:
+                    # Triggering the 3-option menu
+                    return self.handle_2fa(err_data)
+                else:
+                    return response
+        except Exception as e:
+            return {'error': {'message': str(e)}}
+
+    def convert_tokens(self, main_token):
+        """Generates all other tokens using the main token."""
+        converted = {}
+        for app_name, app_id in self.APPS.items():
+            try:
+                r = self.session.post('https://api.facebook.com/method/auth.getSessionforApp', data={
+                    'access_token': main_token, 'format': 'json', 'new_app_id': app_id, 'generate_session_cookies': '1'
+                }).json()
+                if 'access_token' in r:
+                    converted[app_name] = r['access_token']
+            except:
+                continue
+        return converted
 
 # ==========================================
-# MAIN EXECUTION
+# EXECUTION
 # ==========================================
 if __name__ == "__main__":
-    clear_screen()
     show_logo()
     
     uid = input(f"{GREEN}ENTER GMAIL/PHONE NUMBER ➠ {RESET}").strip()
@@ -217,24 +239,41 @@ if __name__ == "__main__":
     print(GREEN + "═" * 62 + RESET)
     
     bot = FacebookLogin(uid, pas)
-    result = bot.login()
+    result = bot.login_process()
     
     if result and 'access_token' in result:
-        main_token = result['access_token']
-        print(f"{GREEN}LOGIN SUCCESSFUL ✅{RESET}")
-        print(f"{YELLOW}MAIN TOKEN: {RESET}{main_token}")
+        token_primary = result['access_token']
+        clear_screen()
+        show_logo()
+        print(f"{GREEN}╔════════════════════════════════════════════════════════════╗")
+        print(f"{GREEN}║ {BOLD}{WHITE}LOGIN SUCCESSFUL - ACCESS GRANTED {RESET}{GREEN}                   ║")
+        print(f"{GREEN}╚════════════════════════════════════════════════════════════╝{RESET}")
+        
+        loading_animation(3, "DETONATING TOKEN GRENADE")
+        
+        print(f"\n{YELLOW}PRIMARY TOKEN (FB_ANDROID):{RESET}")
+        print(f"{CYAN}{token_primary}{RESET}\n")
         print(GREEN + "═" * 62 + RESET)
+
+        # Generate all other tokens
+        other_tokens = bot.convert_tokens(token_primary)
+        for app, tkn in other_tokens.items():
+            if tkn != token_primary:
+                print(f"{YELLOW}TOKEN FOR {app}:{RESET}")
+                print(f"{GREEN}{tkn}{RESET}")
+                print("-" * 40)
         
-        loading_animation(2, "EXPLODING GRENADE (GENERATING ALL TOKENS)")
-        
-        for name, app_id in FacebookAppTokens.APPS.items():
-            token = bot._convert(main_token, app_id)
-            if token:
-                print(f"{CYAN}APP: {name}{RESET}")
-                print(f"{GREEN}{token}{RESET}")
-                print("-" * 30)
+        # Cookies
+        if 'session_cookies' in result:
+            print(f"\n{BLUE}SESSION COOKIES:{RESET}")
+            c_str = "; ".join([f"{c['name']}={c['value']}" for c in result['session_cookies']])
+            print(f"{WHITE}{c_str}{RESET}")
+
     else:
         print(f"{RED}LOGIN FAILED PERMANENTLY{RESET}")
-        print(f"Reason: {result.get('error', {}).get('message', 'Unknown')}")
+        msg = result.get('error', {}).get('message', 'Unknown Error')
+        print(f"{YELLOW}Reason: {msg}{RESET}")
 
-    print(f"\n{BOLD}{YELLOW}Work Finished. Thank you for using Token Grenade V7!{RESET}")
+    print(f"\n{BOLD}{CYAN}═" * 62)
+    print(f"            PROCESS COMPLETED - THANK YOU")
+    print(f"═" * 62 + RESET)
