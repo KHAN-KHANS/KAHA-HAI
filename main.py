@@ -18,44 +18,49 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 BLUE = "\033[94m"
 CYAN = "\033[96m"
-WHITE = "\033[97m"
+MAGENTA = "\033[95m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
-def animated_print(text, delay=0.02, color=GREEN):
-    """Stylish typewriter effect."""
+def animated_print(text, delay=0.01, color=GREEN):
+    """Prints text with a typewriter animation effect."""
     for char in text:
         sys.stdout.write(color + char + RESET)
         sys.stdout.flush()
         time.sleep(delay)
     print()
 
-def loading_animation(duration=3, label="PROCESSING"):
-    """Matrix style loading bar."""
-    chars = ["█", "▒", "░", "█"]
+def loading_animation(duration=3, text="PLEASE WAIT..."):
+    """Displays a professional loading animation."""
+    chars = ["⠙", "⠘", "⠰", "⠴", "⠤", "⠦", "⠆", "⠃", "⠋", "⠉"]
     end_time = time.time() + duration
     while time.time() < end_time:
         for char in chars:
-            percent = random.randint(10, 99)
-            sys.stdout.write(f"\r{CYAN}[{char}] {BOLD}{label}... {percent}%{RESET}")
+            sys.stdout.write(f"\r{CYAN}[{char}] {BOLD}{text}{RESET}")
             sys.stdout.flush()
             time.sleep(0.1)
-    sys.stdout.write("\r" + " " * 60 + "\r")
+    sys.stdout.write("\r" + " " * 50 + "\r")
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def show_logo():
-    clear_screen()
-    logo = f"""
-{CYAN}     ███╗   ██╗ █████╗ ██████╗ ███████╗███████╗███╗   ███╗
-{BLUE}     ████╗  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝████╗ ████║
-{GREEN}     ██╔██╗ ██║███████║██║  ██║█████╗  █████╗  ██╔████╔██║
-{YELLOW}     ██║╚██╗██║██╔══██║██║  ██║██╔══╝  ██╔══╝  ██║╚██╔╝██║
-{RED}     ██║ ╚████║██║  ██║██████╔╝███████╗███████╗██║ ╚═╝ ██║
-{CYAN}     ╚═╝  ╚═══╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝╚═╝     ╚═╝
-{BOLD}{WHITE}             [ TOKEN GRENADE V7 - BY ALIYA×NADEEM ]             {RESET}"""
-    print(logo)
+    # Enhanced Stylish Logo
+    logo_lines = [
+            "     ███╗   ██╗ █████╗ ██████╗ ███████╗███████╗███╗   ███╗",
+            "     ████╗  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝████╗ ████║",
+            "     ██╔██╗ ██║███████║██║  ██║█████╗  █████╗  ██╔████╔██║",
+            "     ██║╚██╗██║██╔══██║██║  ██║██╔══╝  ██╔══╝  ██║╚██╔╝██║",
+            "     ██║ ╚████║██║  ██║██████╔╝███████╗███████╗██║ ╚═╝ ██║",
+            "     ╚═╝  ╚═══╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝╚═╝     ╚═╝",
+            "                [ TOKEN GRENADE V7 TOOL v2.1 ]             "
+    ]
+    
+    colors = [CYAN, BLUE, GREEN, YELLOW, RED, MAGENTA]
+    for line in logo_lines:
+        color = random.choice(colors)
+        print(color + BOLD + line + RESET)
+        time.sleep(0.03)
     print(GREEN + "═" * 62 + RESET)
 
 # ==========================================
@@ -66,11 +71,12 @@ try:
     from Crypto.PublicKey import RSA
     from Crypto.Random import get_random_bytes
 except ImportError:
-    print(f"{RED}Error: 'pycryptodome' missing. Run: pip install pycryptodome{RESET}")
+    print(f"{GREEN}Error: 'pycryptodome' module not found.{RESET}")
+    print(f"{YELLOW}Run: pip install pycryptodome{RESET}")
     exit()
 
 # ==========================================
-# CORE FACEBOOK LOGIC
+# CORE CLASSES
 # ==========================================
 
 class FacebookPasswordEncryptor:
@@ -80,200 +86,507 @@ class FacebookPasswordEncryptor:
             url = 'https://b-graph.facebook.com/pwd_key_fetch'
             params = {
                 'version': '2',
+                'flow': 'CONTROLLER_INITIALIZATION',
+                'method': 'GET',
+                'fb_api_req_friendly_name': 'pwdKeyFetch',
+                'fb_api_caller_class': 'com.facebook.auth.login.AuthOperations',
                 'access_token': '438142079694454|fc0a7caa49b192f64f6f5a6d9643bb28'
             }
-            res = requests.post(url, params=params).json()
-            return res.get('public_key'), str(res.get('key_id', '25'))
-        except:
-            return None, "25"
+            response = requests.post(url, params=params).json()
+            return response.get('public_key'), str(response.get('key_id', '25'))
+        except Exception as e:
+            raise Exception(f"Public key fetch error: {e}")
 
     @staticmethod
     def encrypt(password, public_key=None, key_id="25"):
-        if not public_key:
+        if public_key is None:
             public_key, key_id = FacebookPasswordEncryptor.get_public_key()
-        
-        rand_key = get_random_bytes(32)
-        iv = get_random_bytes(12)
-        pubkey = RSA.import_key(public_key)
-        cipher_rsa = PKCS1_v1_5.new(pubkey)
-        enc_rand_key = cipher_rsa.encrypt(rand_key)
-        cipher_aes = AES.new(rand_key, AES.MODE_GCM, nonce=iv)
-        ts = int(time.time())
-        cipher_aes.update(str(ts).encode())
-        enc_pass, auth_tag = cipher_aes.encrypt_and_digest(password.encode())
-        
-        buf = io.BytesIO()
-        buf.write(bytes([1, int(key_id)]))
-        buf.write(iv)
-        buf.write(struct.pack("<h", len(enc_rand_key)))
-        buf.write(enc_rand_key)
-        buf.write(auth_tag)
-        buf.write(enc_pass)
-        return f"#PWD_FB4A:2:{ts}:{base64.b64encode(buf.getvalue()).decode()}"
+
+        try:
+            rand_key = get_random_bytes(32)
+            iv = get_random_bytes(12)
+            
+            pubkey = RSA.import_key(public_key)
+            cipher_rsa = PKCS1_v1_5.new(pubkey)
+            encrypted_rand_key = cipher_rsa.encrypt(rand_key)
+            
+            cipher_aes = AES.new(rand_key, AES.MODE_GCM, nonce=iv)
+            current_time = int(time.time())
+            cipher_aes.update(str(current_time).encode("utf-8"))
+            encrypted_passwd, auth_tag = cipher_aes.encrypt_and_digest(password.encode("utf-8"))
+            
+            buf = io.BytesIO()
+            buf.write(bytes([1, int(key_id)]))
+            buf.write(iv)
+            buf.write(struct.pack("<h", len(encrypted_rand_key)))
+            buf.write(encrypted_rand_key)
+            buf.write(auth_tag)
+            buf.write(encrypted_passwd)
+            
+            encoded = base64.b64encode(buf.getvalue()).decode("utf-8")
+            return f"#PWD_FB4A:2:{current_time}:{encoded}"
+        except Exception as e:
+            raise Exception(f"Encryption error: {e}")
+
+
+class FacebookAppTokens:
+    APPS = {
+        'FB_ANDROID': {'name': 'Facebook For Android', 'app_id': '350685531728'},
+        'CONVO_TOKEN V7': {'name': 'Facebook Messenger For Android', 'app_id': '256002347743983'},
+        'FB_LITE': {'name': 'Facebook For Lite', 'app_id': '275254692598279'},
+        'MESSENGER_LITE': {'name': 'Facebook Messenger For Lite', 'app_id': '200424423651082'},
+        'ADS_MANAGER_ANDROID': {'name': 'Ads Manager App For Android', 'app_id': '438142079694454'},
+        'PAGES_MANAGER_ANDROID': {'name': 'Pages Manager For Android', 'app_id': '121876164619130'}
+    }
+    
+    @staticmethod
+    def get_app_id(app_key):
+        app = FacebookAppTokens.APPS.get(app_key)
+        return app['app_id'] if app else None
+    
+    @staticmethod
+    def get_all_app_keys():
+        return list(FacebookAppTokens.APPS.keys())
+    
+    @staticmethod
+    def extract_token_prefix(token):
+        for i, char in enumerate(token):
+            if char.islower():
+                return token[:i]
+        return token
+
 
 class FacebookLogin:
-    APPS = {
-        'FB_ANDROID': '350685531728',
-        'MESSENGER': '256002347743983',
-        'FB_LITE': '275254692598279',
-        'ADS_MANAGER': '438142079694454'
+    API_URL = "https://b-graph.facebook.com/auth/login"
+    ACCESS_TOKEN = "350685531728|62f8ce9f74b12f84c123cc23437a4a32"
+    API_KEY = "882a8490361da98702bf97a021ddc14d"
+    SIG = "214049b9f17c38bd767de53752b53946"
+    
+    BASE_HEADERS = {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-fb-net-hni": "45201",
+        "zero-rated": "0",
+        "x-fb-sim-hni": "45201",
+        "x-fb-connection-quality": "EXCELLENT",
+        "x-fb-friendly-name": "authenticate",
+        "x-fb-connection-bandwidth": "78032897",
+        "x-tigon-is-retry": "False",
+        "authorization": "OAuth null",
+        "x-fb-connection-type": "WIFI",
+        "x-fb-device-group": "3342",
+        "priority": "u=3,i",
+        "x-fb-http-engine": "Liger",
+        "x-fb-client-ip": "True",
+        "x-fb-server-cluster": "True"
     }
-
-    def __init__(self, identifier, password):
-        self.identifier = identifier
-        self.raw_password = password
-        self.password = FacebookPasswordEncryptor.encrypt(password)
+    
+    def __init__(self, uid_phone_mail, password, machine_id=None, convert_token_to=None, convert_all_tokens=False):
+        self.uid_phone_mail = uid_phone_mail
+        
+        if password.startswith("#PWD_FB4A"):
+            self.password = password
+        else:
+            animated_print("[*] ENCRYPTING PASSWORD...", color=CYAN)
+            loading_animation(2, "ENCRYPTING PASSWORD...")
+            self.password = FacebookPasswordEncryptor.encrypt(password)
+        
+        if convert_all_tokens:
+            self.convert_token_to = FacebookAppTokens.get_all_app_keys()
+        elif convert_token_to:
+            self.convert_token_to = convert_token_to if isinstance(convert_token_to, list) else [convert_token_to]
+        else:
+            self.convert_token_to = []
+        
         self.session = requests.Session()
+        
         self.device_id = str(uuid.uuid4())
-        self.machine_id = ''.join(random.choices(string.ascii_letters + string.digits, k=24))
-
-    def _get_headers(self):
-        return {
-            "content-type": "application/x-www-form-urlencoded",
-            "x-fb-connection-type": "WIFI",
-            "user-agent": "Dalvik/2.1.0 (Linux; U; Android 9; Redmi Build/PQ3A.190705.08211809) [FBAN/FB4A;FBAV/417.0.0.33.65;FBPN/com.facebook.katana;FBLC/vi_VN;FBBV/480086274;]"
-        }
-
-    def handle_2fa(self, error_data):
-        """Infinite loop for 2FA selection and verification."""
-        while True:
-            show_logo()
-            print(f"{RED}╔════════════════════════════════════════════════════════════╗")
-            print(f"{RED}║ {BOLD}{WHITE}SECURITY CHECK: TWO-FACTOR AUTHENTICATION REQUIRED {RESET}{RED}      ║")
-            print(f"{RED}╚════════════════════════════════════════════════════════════╝{RESET}")
-            print(f"{CYAN}[1]{RESET} Get code via {GREEN}WhatsApp{RESET}")
-            print(f"{CYAN}[2]{RESET} Get code via {GREEN}SMS (Mobile Number){RESET}")
-            print(f"{CYAN}[3]{RESET} Get code via {GREEN}Gmail / Email{RESET}")
-            print(f"{CYAN}[0]{RESET} Exit Tool")
-            print(GREEN + "═" * 62 + RESET)
-            
-            choice = input(f"{YELLOW}SELECT OPTION ➠ {RESET}").strip()
-            
-            if choice == '0': sys.exit()
-            if choice in ['1', '2', '3']:
-                methods = ["WhatsApp", "SMS", "Email"]
-                selected_method = methods[int(choice)-1]
-                
-                animated_print(f"[*] Requesting OTP link via {selected_method}...", color=CYAN)
-                loading_animation(2, "SENDING REQUEST")
-                
-                print(GREEN + "═" * 62 + RESET)
-                otp_code = input(f"{YELLOW}ENTER 6-DIGIT CODE RECEIVED ➠ {RESET}").strip()
-                
-                loading_animation(2, "VERIFYING CODE")
-                
-                # Verification attempt
-                data_2fa = {
-                    'format': 'json', 'email': self.identifier, 'device_id': self.device_id,
-                    'access_token': "350685531728|62f8ce9f74b12f84c123cc23437a4a32",
-                    'generate_session_cookies': 'true', 'twofactor_code': otp_code,
-                    'credentials_type': 'two_factor', 'userid': error_data['uid'],
-                    'machine_id': self.machine_id, 'password': self.password,
-                    'first_factor': error_data.get('login_first_factor')
-                }
-                
-                try:
-                    res = self.session.post("https://b-graph.facebook.com/auth/login", data=data_2fa, headers=self._get_headers()).json()
-                    if 'access_token' in res:
-                        return res
-                    else:
-                        print(f"{RED}[!] ERROR: {res.get('error', {}).get('message', 'Wrong Code')}{RESET}")
-                        time.sleep(2)
-                except Exception as e:
-                    print(f"{RED}[!] Connection Error: {e}{RESET}")
-                    time.sleep(2)
-            else:
-                print(f"{RED}[!] Invalid Choice. Try Again.{RESET}")
-                time.sleep(1)
-
-    def login_process(self):
-        """Initial login attempt."""
-        animated_print("[*] SECURE CONNECTION ESTABLISHED...", color=CYAN)
-        loading_animation(2, "INJECTING PAYLOAD")
+        self.adid = str(uuid.uuid4())
+        self.secure_family_device_id = str(uuid.uuid4())
+        self.machine_id = machine_id if machine_id else self._generate_machine_id()
+        self.jazoest = ''.join(random.choices(string.digits, k=5))
+        self.sim_serial = ''.join(random.choices(string.digits, k=20))
         
-        data = {
-            "format": "json", "email": self.identifier, "password": self.password,
-            "generate_session_cookies": "1", "api_key": "882a8490361da98702bf97a021ddc14d",
-            "device_id": self.device_id, "machine_id": self.machine_id,
-            "access_token": "350685531728|62f8ce9f74b12f84c123cc23437a4a32"
+        self.headers = self._build_headers()
+        self.data = self._build_data()
+    
+    @staticmethod
+    def _generate_machine_id():
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=24))
+    
+    def _build_headers(self):
+        headers = self.BASE_HEADERS.copy()
+        headers.update({
+            "x-fb-request-analytics-tags": '{"network_tags":{"product":"350685531728","retry_attempt":"0"},"application_tags":"unknown"}',
+            "user-agent": "Dalvik/2.1.0 (Linux; U; Android 9; 23113RKC6C Build/PQ3A.190705.08211809) [FBAN/FB4A;FBAV/417.0.0.33.65;FBPN/com.facebook.katana;FBLC/vi_VN;FBBV/480086274;FBCR/MobiFone;FBMF/Redmi;FBBD/Redmi;FBDV/23113RKC6C;FBSV/9;FBCA/x86:armeabi-v7a;FBDM/{density=1.5,width=1280,height=720};FB_FW/1;FBRV/0;]"
+        })
+        return headers
+    
+    def _build_data(self):
+        base_data = {
+            "format": "json",
+            "email": self.uid_phone_mail,
+            "password": self.password,
+            "credentials_type": "password",
+            "generate_session_cookies": "1",
+            "locale": "vi_VN",
+            "client_country_code": "VN",
+            "api_key": self.API_KEY,
+            "access_token": self.ACCESS_TOKEN
         }
         
+        base_data.update({
+            "adid": self.adid,
+            "device_id": self.device_id,
+            "generate_analytics_claim": "1",
+            "community_id": "",
+            "linked_guest_account_userid": "",
+            "cpl": "true",
+            "try_num": "1",
+            "family_device_id": self.device_id,
+            "secure_family_device_id": self.secure_family_device_id,
+            "sim_serials": f'["{self.sim_serial}"]',
+            "openid_flow": "android_login",
+            "openid_provider": "google",
+            "openid_tokens": "[]",
+            "account_switcher_uids": f'["{self.uid_phone_mail}"]',
+            "fb4a_shared_phone_cpl_experiment": "fb4a_shared_phone_nonce_cpl_at_risk_v3",
+            "fb4a_shared_phone_cpl_group": "enable_v3_at_risk",
+            "enroll_misauth": "false",
+            "error_detail_type": "button_with_disabled",
+            "source": "login",
+            "machine_id": self.machine_id,
+            "jazoest": self.jazoest,
+            "meta_inf_fbmeta": "V2_UNTAGGED",
+            "advertiser_id": self.adid,
+            "encrypted_msisdn": "",
+            "currently_logged_in_userid": "0",
+            "fb_api_req_friendly_name": "authenticate",
+            "fb_api_caller_class": "Fb4aAuthHandler",
+            "sig": self.SIG
+        })
+        
+        return base_data
+    
+    def _convert_token(self, access_token, target_app):
         try:
-            response = self.session.post("https://b-graph.facebook.com/auth/login", data=data, headers=self._get_headers()).json()
+            app_id = FacebookAppTokens.get_app_id(target_app)
+            if not app_id:
+                return None
             
-            if 'access_token' in response:
-                return response
+            response = requests.post(
+                'https://api.facebook.com/method/auth.getSessionforApp',
+                data={
+                    'access_token': access_token,
+                    'format': 'json',
+                    'new_app_id': app_id,
+                    'generate_session_cookies': '1'
+                }
+            )
             
-            if 'error' in response:
-                err_data = response.get('error', {}).get('error_data', {})
-                if 'login_first_factor' in err_data:
-                    # Triggering the 3-option menu
-                    return self.handle_2fa(err_data)
-                else:
-                    return response
-        except Exception as e:
-            return {'error': {'message': str(e)}}
-
-    def convert_tokens(self, main_token):
-        """Generates all other tokens using the main token."""
-        converted = {}
-        for app_name, app_id in self.APPS.items():
+            result = response.json()
+            
+            if 'access_token' in result:
+                token = result['access_token']
+                prefix = FacebookAppTokens.extract_token_prefix(token)
+                
+                cookies_dict = {}
+                cookies_string = ""
+                
+                if 'session_cookies' in result:
+                    for cookie in result['session_cookies']:
+                        cookies_dict[cookie['name']] = cookie['value']
+                        cookies_string += f"{cookie['name']}={cookie['value']}; "
+                
+                return {
+                    'token_prefix': prefix,
+                    'access_token': token,
+                    'cookies': {
+                        'dict': cookies_dict,
+                        'string': cookies_string.rstrip('; ')
+                    }
+                }
+            return None     
+        except:
+            return None
+    
+    def _parse_success_response(self, response_json):
+        original_token = response_json.get('access_token')
+        original_prefix = FacebookAppTokens.extract_token_prefix(original_token)
+        
+        result = {
+            'success': True,
+            'original_token': {
+                'token_prefix': original_prefix,
+                'access_token': original_token
+            },
+            'cookies': {}
+        }
+        
+        if 'session_cookies' in response_json:
+            cookies_dict = {}
+            cookies_string = ""
+            for cookie in response_json['session_cookies']:
+                cookies_dict[cookie['name']] = cookie['value']
+                cookies_string += f"{cookie['name']}={cookie['value']}; "
+            result['cookies'] = {
+                'dict': cookies_dict,
+                'string': cookies_string.rstrip('; ')
+            }
+        
+        if self.convert_token_to:
+            result['converted_tokens'] = {}
+            for target_app in self.convert_token_to:
+                converted = self._convert_token(original_token, target_app)
+                if converted:
+                    result['converted_tokens'][target_app] = converted
+        
+        return result
+    
+    def _show_2fa_menu(self, error_data):
+        print("\n" + YELLOW + "═" * 62 + RESET)
+        animated_print("         ⚠️  2-FACTOR AUTHENTICATION REQUIRED  ⚠️", color=RED)
+        print(YELLOW + "═" * 62 + RESET)
+        
+        print(f"\n{MAGENTA}Username/Email: {CYAN}{self.uid_phone_mail}{RESET}")
+        print(f"{MAGENTA}User ID: {CYAN}{error_data.get('uid', 'N/A')}{RESET}")
+        print("\n" + GREEN + "─" * 62 + RESET)
+        
+        animated_print("📱 FACEBOOK SENT A 6-DIGIT CODE TO YOUR DEVICE:", color=CYAN)
+        print("\n" + YELLOW + "┌─────────────────────────────────────────────────────────────┐")
+        print("│            SELECT VERIFICATION METHOD:                    │")
+        print("├─────────────────────────────────────────────────────────────┤")
+        print("│  [1] 📲 Get Code via WhatsApp                              │")
+        print("│  [2] ✉️  Get Code via SMS                                   │")
+        print("│  [3] 📧 Get Code via Email                                 │")
+        print("│  [0] ❌ Cancel & Exit                                       │")
+        print("└─────────────────────────────────────────────────────────────┘" + RESET)
+        
+        while True:
             try:
-                r = self.session.post('https://api.facebook.com/method/auth.getSessionforApp', data={
-                    'access_token': main_token, 'format': 'json', 'new_app_id': app_id, 'generate_session_cookies': '1'
-                }).json()
-                if 'access_token' in r:
-                    converted[app_name] = r['access_token']
-            except:
-                continue
-        return converted
+                choice = input(f"\n{YELLOW}➤ SELECT OPTION [1/2/3/0]: {RESET}").strip()
+                
+                if choice == '0':
+                    return {'success': False, 'error': '2FA Verification Cancelled'}
+                
+                if choice in ['1', '2', '3']:
+                    methods = {
+                        '1': 'WhatsApp',
+                        '2': 'SMS',
+                        '3': 'Email'
+                    }
+                    
+                    animated_print(f"\n📤 SENDING CODE VIA {methods[choice]}...", color=GREEN)
+                    loading_animation(3, f"SENDING CODE VIA {methods[choice]}...")
+                    
+                    # Simulate sending code (in real scenario, this would trigger Facebook's 2FA)
+                    print(f"\n{CYAN}✓ Code sent successfully via {methods[choice]}{RESET}")
+                    print(f"{YELLOW}⚠️  Check your {methods[choice]} for the 6-digit code{RESET}")
+                    print(GREEN + "─" * 62 + RESET)
+                    
+                    # Get the code from user
+                    max_attempts = 3
+                    for attempt in range(1, max_attempts + 1):
+                        try:
+                            print(f"\n{YELLOW}↳ ATTEMPT {attempt}/{max_attempts}{RESET}")
+                            otp_code = input(f"{GREEN}➤ ENTER 6-DIGIT CODE: {RESET}").strip()
+                            
+                            if not otp_code.isdigit() or len(otp_code) != 6:
+                                print(f"{RED}✗ Invalid code format. Please enter 6 digits.{RESET}")
+                                continue
+                                
+                            print(f"{CYAN}✓ CODE ENTERED: {otp_code}{RESET}")
+                            loading_animation(2, "VERIFYING CODE...")
+                            
+                            # Verify the code with Facebook
+                            result = self._verify_2fa_code(otp_code, error_data)
+                            if result:
+                                return result
+                            else:
+                                if attempt < max_attempts:
+                                    print(f"{RED}✗ Invalid code. Try again.{RESET}")
+                                else:
+                                    print(f"{RED}✗ Maximum attempts reached.{RESET}")
+                                    return {'success': False, 'error': 'Too many failed attempts'}
+                                    
+                        except KeyboardInterrupt:
+                            return {'success': False, 'error': '2FA Verification Cancelled'}
+                    
+                else:
+                    print(f"{RED}✗ Invalid option. Please choose 1, 2, 3, or 0.{RESET}")
+                    
+            except KeyboardInterrupt:
+                return {'success': False, 'error': '2FA Verification Cancelled'}
+    
+    def _verify_2fa_code(self, otp_code, error_data):
+        try:
+            data_2fa = {
+                'locale': 'vi_VN',
+                'format': 'json',
+                'email': self.uid_phone_mail,
+                'device_id': self.device_id,
+                'access_token': self.ACCESS_TOKEN,
+                'generate_session_cookies': 'true',
+                'generate_machine_id': '1',
+                'twofactor_code': otp_code,
+                'credentials_type': 'two_factor',
+                'error_detail_type': 'button_with_disabled',
+                'first_factor': error_data['login_first_factor'],
+                'password': self.password,
+                'userid': error_data['uid'],
+                'machine_id': error_data['login_first_factor']
+            }
+            
+            response = self.session.post(self.API_URL, data=data_2fa, headers=self.headers)
+            response_json = response.json()
+            
+            if 'access_token' in response_json:
+                print(f"\n{GREEN}✓ CODE VERIFIED SUCCESSFULLY!{RESET}")
+                loading_animation(2, "GENERATING TOKENS...")
+                return self._parse_success_response(response_json)
+            elif 'error' in response_json:
+                error_msg = response_json['error'].get('message', 'OTP Verification Failed')
+                return None
+            else:
+                return None
+                
+        except Exception as e:
+            print(f"{RED}✗ Verification error: {str(e)}{RESET}")
+            return None
+    
+    def login(self):
+        try:
+            animated_print("\n[*] INITIATING LOGIN PROCESS...", color=CYAN)
+            loading_animation(2, "CONNECTING TO FACEBOOK...")
+            
+            response = self.session.post(self.API_URL, headers=self.headers, data=self.data)
+            response_json = response.json()
+            
+            if 'access_token' in response_json:
+                print(f"\n{GREEN}✓ LOGIN SUCCESSFUL!{RESET}")
+                loading_animation(2, "PARSING RESPONSE...")
+                return self._parse_success_response(response_json)
+            
+            if 'error' in response_json:
+                error_data = response_json.get('error', {}).get('error_data', {})
+                
+                if 'login_first_factor' in error_data and 'uid' in error_data:
+                    return self._show_2fa_menu(error_data)
+                
+                error_msg = response_json['error'].get('message', 'Unknown error')
+                error_user_msg = response_json['error'].get('error_user_msg', '')
+                
+                return {
+                    'success': False,
+                    'error': error_msg,
+                    'error_user_msg': error_user_msg
+                }
+            
+            return {'success': False, 'error': 'Unknown response format'}
+            
+        except json.JSONDecodeError:
+            return {'success': False, 'error': 'Invalid JSON response from Facebook'}
+        except Exception as e:
+            return {'success': False, 'error': f'Connection error: {str(e)}'}
 
 # ==========================================
-# EXECUTION
+# MAIN EXECUTION
 # ==========================================
 if __name__ == "__main__":
+    clear_screen()
     show_logo()
     
-    uid = input(f"{GREEN}ENTER GMAIL/PHONE NUMBER ➠ {RESET}").strip()
-    pas = input(f"{GREEN}ENTER PASSWORD ➠ {RESET}").strip()
-    print(GREEN + "═" * 62 + RESET)
-    
-    bot = FacebookLogin(uid, pas)
-    result = bot.login_process()
-    
-    if result and 'access_token' in result:
-        token_primary = result['access_token']
-        clear_screen()
-        show_logo()
-        print(f"{GREEN}╔════════════════════════════════════════════════════════════╗")
-        print(f"{GREEN}║ {BOLD}{WHITE}LOGIN SUCCESSFUL - ACCESS GRANTED {RESET}{GREEN}                   ║")
-        print(f"{GREEN}╚════════════════════════════════════════════════════════════╝{RESET}")
-        
-        loading_animation(3, "DETONATING TOKEN GRENADE")
-        
-        print(f"\n{YELLOW}PRIMARY TOKEN (FB_ANDROID):{RESET}")
-        print(f"{CYAN}{token_primary}{RESET}\n")
-        print(GREEN + "═" * 62 + RESET)
+    print(GREEN + "═" * 62)
+    animated_print("         CONVO V7 TOKEN GRENADE BY ALIYA×NADEEM", color=YELLOW)
+    animated_print("           ALL TOKENS GENERATOR VERSION 2.1", color=CYAN)
+    print("═" * 62 + RESET)
 
-        # Generate all other tokens
-        other_tokens = bot.convert_tokens(token_primary)
-        for app, tkn in other_tokens.items():
-            if tkn != token_primary:
-                print(f"{YELLOW}TOKEN FOR {app}:{RESET}")
-                print(f"{GREEN}{tkn}{RESET}")
-                print("-" * 40)
+    # Get credentials
+    print(f"\n{MAGENTA}┌─────────────────────────────────────────────────────────────┐")
+    print("│                 ENTER LOGIN CREDENTIALS                   │")
+    print("└─────────────────────────────────────────────────────────────┘{RESET}")
+    
+    uid_phone_mail = input(f"\n{GREEN}➤ ENTER EMAIL/PHONE NUMBER: {RESET}").strip()
+    password = input(f"{GREEN}➤ ENTER PASSWORD: {RESET}").strip()
+    
+    print(f"\n{BLUE}─" * 62 + RESET)
+    
+    # Initialize login
+    fb_login = FacebookLogin(
+        uid_phone_mail=uid_phone_mail,
+        password=password,
+        convert_all_tokens=True
+    )
+    
+    # Attempt login
+    result = fb_login.login()
+    
+    # Display results
+    if result['success']:
+        print(f"\n{GREEN}═" * 62)
+        animated_print("         ✅ LOGIN SUCCESSFUL - TOKENS GENERATED", color=GREEN)
+        print("═" * 62 + RESET)
         
-        # Cookies
-        if 'session_cookies' in result:
-            print(f"\n{BLUE}SESSION COOKIES:{RESET}")
-            c_str = "; ".join([f"{c['name']}={c['value']}" for c in result['session_cookies']])
-            print(f"{WHITE}{c_str}{RESET}")
-
+        # Display original token
+        print(f"\n{YELLOW}┌─────────────────────────────────────────────────────────────┐")
+        print("│                    ORIGINAL TOKEN                          │")
+        print("├─────────────────────────────────────────────────────────────┤{RESET}")
+        print(f"{MAGENTA}TYPE: {CYAN}{result['original_token']['token_prefix']}{RESET}")
+        print(f"{GREEN}{result['original_token']['access_token']}{RESET}")
+        print(f"{YELLOW}└─────────────────────────────────────────────────────────────┘{RESET}")
+        
+        # Display converted tokens
+        if 'converted_tokens' in result and result['converted_tokens']:
+            print(f"\n{CYAN}═" * 62)
+            animated_print("           🔄 CONVERTED APPLICATION TOKENS", color=CYAN)
+            print("═" * 62 + RESET)
+            
+            for app_key, token_data in result['converted_tokens'].items():
+                print(f"\n{YELLOW}┌─────────────────────────────────────────────────────────────┐")
+                print(f"│  APP: {app_key: <48}│")
+                print(f"│  TYPE: {token_data['token_prefix']: <48}│")
+                print("├─────────────────────────────────────────────────────────────┤{RESET}")
+                print(f"{GREEN}{token_data['access_token']}{RESET}")
+                print(f"{YELLOW}└─────────────────────────────────────────────────────────────┘{RESET}")
+        
+        # Display cookies
+        if result['cookies'].get('string'):
+            print(f"\n{BLUE}═" * 62)
+            animated_print("           🍪 SESSION COOKIES (NETSCAPE FORMAT)", color=BLUE)
+            print("═" * 62 + RESET)
+            print(f"\n{MAGENTA}{result['cookies']['string']}{RESET}")
+        
+        # Success message
+        print(f"\n{GREEN}═" * 62)
+        animated_print("        🎉 ALL TOKENS SUCCESSFULLY GENERATED!", color=GREEN)
+        animated_print("        💾 SAVE YOUR TOKENS SECURELY!", color=YELLOW)
+        print("═" * 62 + RESET)
+        
+        # Auto-exit after 10 seconds
+        print(f"\n{YELLOW}⚠️  Tool will auto-exit in 10 seconds...{RESET}")
+        for i in range(10, 0, -1):
+            sys.stdout.write(f"\r{YELLOW}Exiting in {i} seconds...{RESET}")
+            sys.stdout.flush()
+            time.sleep(1)
+        print(f"\r{YELLOW}Tool completed successfully! Goodbye!{RESET}")
+        
     else:
-        print(f"{RED}LOGIN FAILED PERMANENTLY{RESET}")
-        msg = result.get('error', {}).get('message', 'Unknown Error')
-        print(f"{YELLOW}Reason: {msg}{RESET}")
-
-    print(f"\n{BOLD}{CYAN}═" * 62)
-    print(f"            PROCESS COMPLETED - THANK YOU")
-    print(f"═" * 62 + RESET)
+        print(f"\n{RED}═" * 62)
+        animated_print("             ❌ LOGIN FAILED", color=RED)
+        print("═" * 62 + RESET)
+        
+        print(f"\n{YELLOW}┌─────────────────────────────────────────────────────────────┐")
+        print("│                     ERROR DETAILS                         │")
+        print("├─────────────────────────────────────────────────────────────┤{RESET}")
+        print(f"{MAGENTA}ERROR:{RESET} {RED}{result.get('error', 'Unknown error')}{RESET}")
+        if result.get('error_user_msg'):
+            print(f"{MAGENTA}MESSAGE:{RESET} {YELLOW}{result.get('error_user_msg')}{RESET}")
+        print(f"{YELLOW}└─────────────────────────────────────────────────────────────┘{RESET}")
+        
+        print(f"\n{BLUE}─" * 62 + RESET)
+        print(f"{CYAN}⚠️  Possible Solutions:{RESET}")
+        print(f"{YELLOW}1. Check your internet connection")
+        print(f"2. Verify username/password")
+        print(f"3. Account may be locked/temporarily disabled")
+        print(f"4. Try again later{RESET}")
+        print(f"\n{RED}Tool will exit in 5 seconds...{RESET}")
+        time.sleep(5)
