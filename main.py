@@ -18,7 +18,6 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 BLUE = "\033[94m"
 CYAN = "\033[96m"
-MAGENTA = "\033[95m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
@@ -56,7 +55,7 @@ def show_logo():
             "                [ TOKEN GRENADE V7 TOOL v2.0 ]             "
     ]
     
-    colors = [CYAN, BLUE, GREEN, YELLOW, RED, MAGENTA]
+    colors = [CYAN, BLUE, GREEN, YELLOW, RED]
     for line in logo_lines:
         color = random.choice(colors)
         print(color + BOLD + line + RESET)
@@ -74,121 +73,6 @@ except ImportError:
     print(f"{GREEN}Error: 'pycryptodome' module not found.{RESET}")
     print(f"{YELLOW}Run: pip install pycryptodome{RESET}")
     exit()
-
-# ==========================================
-# COOKIES PARSER AND USER INFO EXTRACTOR
-# ==========================================
-
-class FacebookCookiesParser:
-    @staticmethod
-    def extract_user_info(cookies_string):
-        """Extract user information from cookies."""
-        try:
-            cookies_dict = {}
-            cookies_list = cookies_string.split(';')
-            
-            for cookie in cookies_list:
-                cookie = cookie.strip()
-                if '=' in cookie:
-                    try:
-                        key, value = cookie.split('=', 1)
-                        cookies_dict[key.strip()] = value.strip()
-                    except:
-                        continue
-            
-            # Get user ID from c_user cookie
-            user_id = cookies_dict.get('c_user', 'N/A')
-            
-            # Get user name from cookies or API
-            user_name = "N/A"
-            
-            # Try to extract name from fr cookie or other cookies
-            fr_cookie = cookies_dict.get('fr', '')
-            if fr_cookie:
-                # Try to decode fr cookie
-                try:
-                    import urllib.parse
-                    decoded_fr = urllib.parse.unquote(fr_cookie)
-                    if '.' in decoded_fr:
-                        parts = decoded_fr.split('.')
-                        if len(parts) > 0:
-                            user_name = parts[0]
-                except:
-                    pass
-            
-            return {
-                'user_id': user_id,
-                'user_name': user_name,
-                'cookies_dict': cookies_dict
-            }
-        except Exception as e:
-            return {
-                'user_id': 'N/A',
-                'user_name': 'N/A',
-                'cookies_dict': {}
-            }
-
-    @staticmethod
-    def cookies_to_token(cookies_string):
-        """Convert cookies to access token."""
-        try:
-            cookies_dict = {}
-            cookies_list = cookies_string.split(';')
-            
-            for cookie in cookies_list:
-                cookie = cookie.strip()
-                if '=' in cookie:
-                    try:
-                        key, value = cookie.split('=', 1)
-                        cookies_dict[key.strip()] = value.strip()
-                    except:
-                        continue
-            
-            # Extract user ID and session key
-            user_id = cookies_dict.get('c_user')
-            xs_token = cookies_dict.get('xs')
-            
-            if not user_id or not xs_token:
-                return {
-                    'success': False,
-                    'error': 'Required cookies not found (c_user or xs)'
-                }
-            
-            # Clean xs token (remove URL encoding)
-            try:
-                import urllib.parse
-                xs_token = urllib.parse.unquote(xs_token)
-            except:
-                pass
-            
-            # Format: user_id|session_key
-            access_token = f"{user_id}|{xs_token}"
-            
-            # Get token prefix
-            prefix = ""
-            for i, char in enumerate(access_token):
-                if char.islower():
-                    prefix = access_token[:i]
-                    break
-            if not prefix:
-                prefix = 'EA'
-            
-            return {
-                'success': True,
-                'original_token': {
-                    'token_prefix': prefix,
-                    'access_token': access_token
-                },
-                'cookies': {
-                    'dict': cookies_dict,
-                    'string': cookies_string
-                }
-            }
-        except Exception as e:
-            return {
-                'success': False,
-                'error': f'Cookies parsing error: {str(e)}'
-            }
 
 # ==========================================
 # CORE CLASSES (Preserved Exactly)
@@ -269,6 +153,11 @@ class FacebookAppTokens:
             if char.islower():
                 return token[:i]
         return token
+    
+    @staticmethod
+    def get_app_name(app_key):
+        app = FacebookAppTokens.APPS.get(app_key)
+        return app['name'] if app else app_key
 
 
 class FacebookLogin:
@@ -298,12 +187,10 @@ class FacebookLogin:
     def __init__(self, uid_phone_mail, password, machine_id=None, convert_token_to=None, convert_all_tokens=False):
         self.uid_phone_mail = uid_phone_mail
         
-        if password and password.startswith("#PWD_FB4A"):
+        if password.startswith("#PWD_FB4A"):
             self.password = password
-        elif password:
-            self.password = FacebookPasswordEncryptor.encrypt(password)
         else:
-            self.password = None
+            self.password = FacebookPasswordEncryptor.encrypt(password)
         
         if convert_all_tokens:
             self.convert_token_to = FacebookAppTokens.get_all_app_keys()
@@ -340,6 +227,7 @@ class FacebookLogin:
         base_data = {
             "format": "json",
             "email": self.uid_phone_mail,
+            "password": self.password,
             "credentials_type": "password",
             "generate_session_cookies": "1",
             "locale": "vi_VN",
@@ -347,9 +235,6 @@ class FacebookLogin:
             "api_key": self.API_KEY,
             "access_token": self.ACCESS_TOKEN
         }
-        
-        if self.password:
-            base_data["password"] = self.password
         
         base_data.update({
             "adid": self.adid,
@@ -397,8 +282,7 @@ class FacebookLogin:
                     'format': 'json',
                     'new_app_id': app_id,
                     'generate_session_cookies': '1'
-                },
-                timeout=10
+                }
             )
             
             result = response.json()
@@ -418,13 +302,14 @@ class FacebookLogin:
                 return {
                     'token_prefix': prefix,
                     'access_token': token,
+                    'app_name': FacebookAppTokens.get_app_name(target_app),
                     'cookies': {
                         'dict': cookies_dict,
                         'string': cookies_string.rstrip('; ')
                     }
                 }
             return None     
-        except Exception as e:
+        except:
             return None
     
     def _parse_success_response(self, response_json):
@@ -540,184 +425,107 @@ class FacebookLogin:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-# ==========================================
-# TOKEN GRENADE FUNCTION
-# ==========================================
 
-def generate_tokens_from_cookies(cookies_string):
-    """Generate all tokens from cookies."""
-    try:
-        # First convert cookies to token
-        result = FacebookCookiesParser.cookies_to_token(cookies_string)
-        
-        if not result['success']:
-            return result
-        
-        # Get user info
-        user_info = FacebookCookiesParser.extract_user_info(cookies_string)
-        result['user_info'] = user_info
-        
-        # Get base token from cookies
-        access_token = result['original_token']['access_token']
-        
-        # Get all app keys
-        all_apps = FacebookAppTokens.get_all_app_keys()
-        result['converted_tokens'] = {}
-        
-        animated_print("[*] GENERATING ALL TOKENS...", color=MAGENTA)
-        loading_animation(3)
-        
-        # Create a dummy FacebookLogin instance for token conversion
-        dummy_login = FacebookLogin(None, None)
-        
-        # Generate tokens for all apps
-        successful_tokens = 0
-        for target_app in all_apps:
-            try:
-                animated_print(f"[*] Generating {target_app} token...", delay=0.005, color=CYAN)
-                converted = dummy_login._convert_token(access_token, target_app)
-                if converted:
-                    result['converted_tokens'][target_app] = converted
-                    successful_tokens += 1
-                    print(f"{GREEN}✓ {target_app} token generated{RESET}")
-                else:
-                    print(f"{YELLOW}⚠ {target_app} token failed{RESET}")
-                time.sleep(0.1)
-            except:
-                print(f"{RED}✗ {target_app} token error{RESET}")
-        
-        if successful_tokens > 0:
-            result['success'] = True
-            result['message'] = f"Successfully generated {successful_tokens} out of {len(all_apps)} tokens"
-        else:
-            result['success'] = False
-            result['error'] = "Failed to generate any app tokens"
-        
-        return result
-        
-    except Exception as e:
-        return {
-            'success': False,
-            'error': f'Token generation error: {str(e)}'
-        }
-
-# ==========================================
-# MAIN MENU SYSTEM
-# ==========================================
-
-def show_menu():
-    """Display the main menu."""
-    print(MAGENTA + "\n" + "═" * 62)
-    animated_print("              SELECT LOGIN METHOD", color=CYAN)
-    print("═" * 62)
-    print(f"{GREEN}[1] {BOLD}LOGIN WITH GMAIL/PHONE NUMBER{RESET}")
-    print(f"{YELLOW}[2] {BOLD}LOGIN WITH COOKIES{RESET}")
-    print(f"{RED}[0] {BOLD}EXIT{RESET}")
-    print(GREEN + "═" * 62 + RESET)
-
-def option1_login():
-    """Option 1: Login with Gmail/Phone Number."""
-    print(CYAN + "\n" + "═" * 62)
-    animated_print("   LOGIN WITH GMAIL/PHONE NUMBER", color=CYAN)
-    print("═" * 62 + RESET)
+class CookieToTokenConverter:
+    """Converts cookies to tokens"""
     
-    uid_phone_mail = input(GREEN + "ENTER GMAIL/PHONE NUMBER➠ " + RESET).strip()
-    print(GREEN + "═" * 62 + RESET) 
+    @staticmethod
+    def extract_csrf_token(cookies_string):
+        """Extract csrf token from cookies string"""
+        for cookie in cookies_string.split(';'):
+            if 'c_user' in cookie:
+                parts = cookie.split('=')
+                if len(parts) == 2:
+                    return parts[1].strip()
+        return None
     
-    password = input(GREEN + "ENTER PASSWORD➠ " + RESET).strip()
-    print(GREEN + "═" * 62 + RESET) 
-    
-    fb_login = FacebookLogin(
-        uid_phone_mail=uid_phone_mail,
-        password=password,
-        convert_all_tokens=True
-    )
-    
-    result = fb_login.login()
-    display_results(result)
-
-def option2_cookies():
-    """Option 2: Login with Cookies."""
-    print(YELLOW + "\n" + "═" * 62)
-    animated_print("         LOGIN WITH COOKIES", color=YELLOW)
-    print("═" * 62 + RESET)
-    
-    print(CYAN + "ENTER COOKIES (format: c_user=...; xs=...; fr=...; etc.)")
-    print("Paste your cookies below:" + RESET)
-    cookies_string = input(GREEN + "➠ " + RESET).strip()
-    
-    if not cookies_string:
-        print(RED + "Error: No cookies provided!" + RESET)
-        return
-    
-    print(GREEN + "═" * 62 + RESET)
-    
-    # Extract user info first
-    user_info = FacebookCookiesParser.extract_user_info(cookies_string)
-    
-    print(MAGENTA + "\n" + "═" * 62)
-    animated_print("         USER INFORMATION", color=MAGENTA)
-    print("═" * 62)
-    print(f"{CYAN}USER ID: {GREEN}{user_info['user_id']}{RESET}")
-    print(f"{CYAN}USER NAME: {GREEN}{user_info['user_name']}{RESET}")
-    print(MAGENTA + "═" * 62 + RESET)
-    
-    # Generate tokens from cookies
-    result = generate_tokens_from_cookies(cookies_string)
-    display_results(result)
-
-def display_results(result):
-    """Display the results in a formatted way."""
-    if result.get('success'):
-        print(GREEN + "\n" + "═" * 62)
-        animated_print(" TOKEN GENERATION SUCCESSFUL ✅", color=GREEN)
-        print("═" * 62)
-        
-        # Display user info if available
-        if 'user_info' in result:
-            user_info = result['user_info']
-            print(f"\n{YELLOW}USER ID: {GREEN}{user_info['user_id']}{RESET}")
-            print(f"{YELLOW}USER NAME: {GREEN}{user_info['user_name']}{RESET}")
-            print(GREEN + "═" * 62 + RESET)
-        
-        # Display original token
-        if 'original_token' in result:
-            print(f"\n{YELLOW}ORIGINAL TOKEN ({result['original_token']['token_prefix']}):{RESET}")
-            print(f"{GREEN}{result['original_token']['access_token']}{RESET}")
-            print(GREEN + "═" * 62 + RESET) 
-        
-        # Display converted tokens if available
-        if 'converted_tokens' in result and result['converted_tokens']:
-            print(CYAN + "\n" + "═" * 62)
-            animated_print(" [ SUCCESS ] ALL TOKENS GENERATED ", color=CYAN)
-            print("═" * 62 + RESET)
+    @staticmethod
+    def cookies_to_token(cookies_string):
+        """Convert cookies to access token"""
+        try:
+            csrf_token = CookieToTokenConverter.extract_csrf_token(cookies_string)
+            if not csrf_token:
+                return {'success': False, 'error': 'No c_user found in cookies'}
             
-            for app_key, token_data in result['converted_tokens'].items():
-                print(f"\n{YELLOW}APP: {app_key} ({token_data['token_prefix']}){RESET}")
-                print(f"{GREEN}{token_data['access_token']}{RESET}")
-                print(GREEN + "═" * 62+ RESET)
-        
-        # Display cookies if available
-        if 'cookies' in result and result['cookies'].get('string'):
-            print("\n" + "═" * 62)
-            animated_print(" COOKIES (NETSCAPE/JSON) ", color=CYAN)
-            print("═" * 62)
-            print(f"{YELLOW}{result['cookies']['string']}{RESET}")
-            print(GREEN + "═" * 62 + RESET)
-        
-        # Display success message
-        if 'message' in result:
-            print(f"\n{GREEN}{result['message']}{RESET}")
-        
-    else:
-        print(RED + "\n" + "═" * 62)
-        animated_print(" OPERATION FAILED ", color=RED)
-        print("═" * 62)
-        error_msg = result.get('error', 'Unknown error')
-        animated_print(f"Error: {error_msg}", color=YELLOW)
-        if result.get('error_user_msg'):
-            animated_print(f"Message: {result.get('error_user_msg')}", color=YELLOW)
-        print(GREEN + "═" * 62 + RESET)
+            # Parse cookies into dict
+            cookies_dict = {}
+            for cookie in cookies_string.split(';'):
+                if '=' in cookie:
+                    key, value = cookie.strip().split('=', 1)
+                    cookies_dict[key] = value
+            
+            # Use Facebook's token generation endpoint
+            url = "https://business.facebook.com/business_locations"
+            headers = {
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'accept-language': 'en-US,en;q=0.9',
+                'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'upgrade-insecure-requests': '1'
+            }
+            
+            session = requests.Session()
+            for key, value in cookies_dict.items():
+                session.cookies.set(key, value)
+            
+            response = session.get(url, headers=headers, allow_redirects=True)
+            
+            # Try to extract token from page
+            import re
+            token_patterns = [
+                r'EAAG[\w]{10,}',  # EAAA token pattern
+                r'accessToken["\']\s*:\s*["\']([^"\']+)["\']',
+                r'"access_token"\s*:\s*"([^"]+)"'
+            ]
+            
+            for pattern in token_patterns:
+                matches = re.findall(pattern, response.text)
+                if matches:
+                    token = matches[0]
+                    if token.startswith('EAAG'):
+                        return {
+                            'success': True,
+                            'access_token': token,
+                            'csrf_token': csrf_token,
+                            'cookies': cookies_dict
+                        }
+            
+            return {'success': False, 'error': 'Token not found in response'}
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+
+class AccountInfoFetcher:
+    """Fetches account information from token"""
+    
+    @staticmethod
+    def get_account_info(access_token):
+        """Get account information from Facebook Graph API"""
+        try:
+            url = f"https://graph.facebook.com/me"
+            params = {
+                'access_token': access_token,
+                'fields': 'id,name,first_name,middle_name,last_name,email,gender,link,locale,timezone,updated_time,verified'
+            }
+            
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            if 'error' in data:
+                return {'success': False, 'error': data['error']['message']}
+            
+            return {
+                'success': True,
+                'account_info': data,
+                'display': f"ID: {data.get('id', 'N/A')} | Name: {data.get('name', 'N/A')} | Email: {data.get('email', 'N/A')}"
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
 
 # ==========================================
 # MAIN EXECUTION
@@ -730,39 +538,146 @@ if __name__ == "__main__":
     animated_print("            CONVO V7 TOKEN GRENADE BY ALIYA×NADEEM", color=YELLOW)
     print("═" * 62 + RESET)
     
+    # OPTION SELECTION MENU
+    print(CYAN + "═" * 62)
+    animated_print("           SELECT OPTION (1 OR 2)", color=CYAN)
+    print("═" * 62 + RESET)
+    print(f"{YELLOW}[1] {GREEN}GMAIL/PHONE NUMBER TO TOKEN{RESET}")
+    print(f"{YELLOW}[2] {GREEN}COOKIES TO TOKEN{RESET}")
+    print(GREEN + "═" * 62 + RESET)
+    
     while True:
         try:
-            show_menu()
-            choice = input(CYAN + "SELECT OPTION (0-2)➠ " + RESET).strip()
-            
-            if choice == '1':
-                option1_login()
-            elif choice == '2':
-                option2_cookies()
-            elif choice == '0':
-                print(RED + "\n" + "═" * 62)
-                animated_print(" THANK YOU FOR USING TOKEN GRENADE ", color=RED)
-                print("═" * 62 + RESET)
+            option = input(f"{YELLOW}SELECT OPTION (1/2)➠ {RESET}").strip()
+            if option in ['1', '2']:
                 break
             else:
-                print(RED + "\nInvalid choice! Please select 0, 1, or 2." + RESET)
-                time.sleep(1)
-            
-            # Ask if user wants to continue
-            print("\n" + CYAN + "═" * 62)
-            continue_choice = input(YELLOW + "DO YOU WANT TO CONTINUE? (y/n)➠ " + RESET).strip().lower()
-            if continue_choice != 'y':
-                print(RED + "\n" + "═" * 62)
-                animated_print(" THANK YOU FOR USING TOKEN GRENADE ", color=RED)
-                print("═" * 62 + RESET)
-                break
-            
-            clear_screen()
-            show_logo()
-            
+                print(f"{RED}Invalid option! Please enter 1 or 2{RESET}")
         except KeyboardInterrupt:
-            print(RED + "\n\nProgram interrupted by user. Exiting..." + RESET)
-            break
-        except Exception as e:
-            print(RED + f"\nAn error occurred: {str(e)}" + RESET)
-            time.sleep(2)
+            print(f"\n{RED}Operation cancelled{RESET}")
+            exit()
+    
+    print(GREEN + "═" * 62 + RESET)
+    
+    if option == '1':
+        # OPTION 1: GMAIL/PHONE NUMBER TO TOKEN
+        uid_phone_mail = input(GREEN + "ENTER GMAIL/PHONE NUMBER➠ " + RESET).strip()
+        print(GREEN + "═" * 62 + RESET) 
+        
+        password = input(GREEN + "ENTER PASSWORD➠ " + RESET).strip()
+        print(GREEN + "═" * 62 + RESET) 
+        
+        fb_login = FacebookLogin(
+            uid_phone_mail=uid_phone_mail,
+            password=password,
+            convert_all_tokens=True
+        )
+        
+        result = fb_login.login()
+        
+    elif option == '2':
+        # OPTION 2: COOKIES TO TOKEN
+        print(YELLOW + "ENTER COOKIES (Format: c_user=xxx; xs=xxx; ...)" + RESET)
+        cookies_input = input(GREEN + "ENTER COOKIES➠ " + RESET).strip()
+        print(GREEN + "═" * 62 + RESET)
+        
+        animated_print("[*] CONVERTING COOKIES TO TOKEN...", color=CYAN)
+        loading_animation(2)
+        
+        # Convert cookies to token
+        converter = CookieToTokenConverter()
+        token_result = converter.cookies_to_token(cookies_input)
+        
+        if not token_result['success']:
+            print(RED + "\n" + "═" * 62)
+            animated_print(" CONVERSION FAILED ", color=RED)
+            print("═" * 62)
+            animated_print(f"Error: {token_result.get('error')}", color=YELLOW)
+            print(GREEN + "═" * 62 + RESET)
+            exit()
+        
+        # Get original token
+        original_token = token_result['access_token']
+        original_prefix = FacebookAppTokens.extract_token_prefix(original_token)
+        
+        # Create base result structure
+        result = {
+            'success': True,
+            'original_token': {
+                'token_prefix': original_prefix,
+                'access_token': original_token
+            },
+            'cookies': {
+                'dict': token_result.get('cookies', {}),
+                'string': cookies_input
+            },
+            'from_cookies': True
+        }
+        
+        # Convert to all other tokens
+        print(CYAN + "[*] GENERATING ALL TOKENS FROM COOKIES..." + RESET)
+        loading_animation(2)
+        
+        result['converted_tokens'] = {}
+        for app_key in FacebookAppTokens.get_all_app_keys():
+            converter = FacebookLogin(uid_phone_mail="dummy", password="dummy")
+            converted = converter._convert_token(original_token, app_key)
+            if converted:
+                result['converted_tokens'][app_key] = converted
+    
+    # DISPLAY RESULTS FOR BOTH OPTIONS
+    if result['success']:
+        # Get account information first
+        animated_print("[*] FETCHING ACCOUNT INFORMATION...", color=CYAN)
+        loading_animation(1)
+        
+        account_info = AccountInfoFetcher.get_account_info(result['original_token']['access_token'])
+        
+        print(GREEN + "\n" + "═" * 62)
+        if option == '1':
+            animated_print(" LOGIN SUCCESSFUL ✅", color=GREEN)
+        else:
+            animated_print(" COOKIES CONVERTED SUCCESSFULLY ✅", color=GREEN)
+        
+        if account_info['success']:
+            print(CYAN + "═" * 62)
+            animated_print(" ACCOUNT INFORMATION", color=CYAN)
+            print("═" * 62 + RESET)
+            print(f"{YELLOW}{account_info['display']}{RESET}")
+        
+        print(GREEN + "═" * 62)
+        animated_print(" ORIGINAL TOKEN", color=CYAN)
+        print("═" * 62 + RESET)
+        print(f"{YELLOW}TYPE: {RESET}{result['original_token']['token_prefix']}")
+        print(f"{GREEN}{result['original_token']['access_token']}{RESET}")
+        print(GREEN + "═" * 62 + RESET) 
+        
+        if 'converted_tokens' in result and result['converted_tokens']:
+            print(CYAN + "═" * 62)
+            animated_print(" [ SUCCESS ] ALL TOKENS GENERATED ", color=CYAN)
+            print("═" * 62 + RESET)
+            
+            for app_key, token_data in result['converted_tokens'].items():
+                app_name = FacebookAppTokens.get_app_name(app_key)
+                print(f"\n{YELLOW}APP: {app_key} ({app_name}){RESET}")
+                print(f"{YELLOW}TYPE: {token_data['token_prefix']}{RESET}")
+                print(f"{GREEN}{token_data['access_token']}{RESET}")
+                print(GREEN + "═" * 62 + RESET)
+        
+        print("\n" + "═" * 62)
+        animated_print(" COOKIES (NETSCAPE/JSON) ", color=CYAN)
+        print("═" * 62)
+        print(f"{YELLOW}{result['cookies']['string']}{RESET}")
+        print(GREEN + "═" * 62 + RESET)
+        
+    else:
+        print(RED + "\n" + "═" * 62)
+        if option == '1':
+            animated_print(" LOGIN FAILED ", color=RED)
+        else:
+            animated_print(" CONVERSION FAILED ", color=RED)
+        print("═" * 62)
+        animated_print(f"Error: {result.get('error')}", color=YELLOW)
+        if result.get('error_user_msg'):
+            animated_print(f"Message: {result.get('error_user_msg')}", color=YELLOW)
+        print(GREEN + "═" * 62 + RESET)
