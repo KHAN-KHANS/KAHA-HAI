@@ -427,13 +427,25 @@ class FacebookLogin:
 
 
 class CookieToTokenConverter:
-    """Converts cookies to tokens"""
+    """Converts cookies to tokens - FIXED VERSION"""
     
     @staticmethod
-    def extract_csrf_token(cookies_string):
-        """Extract csrf token from cookies string"""
+    def extract_user_id(cookies_string):
+        """Extract user ID from cookies string"""
         for cookie in cookies_string.split(';'):
-            if 'c_user' in cookie:
+            cookie = cookie.strip()
+            if 'c_user=' in cookie:
+                parts = cookie.split('=')
+                if len(parts) == 2:
+                    return parts[1].strip()
+        return None
+    
+    @staticmethod
+    def extract_xs_token(cookies_string):
+        """Extract xs token from cookies string"""
+        for cookie in cookies_string.split(';'):
+            cookie = cookie.strip()
+            if 'xs=' in cookie and len(cookie) > 10:
                 parts = cookie.split('=')
                 if len(parts) == 2:
                     return parts[1].strip()
@@ -441,61 +453,81 @@ class CookieToTokenConverter:
     
     @staticmethod
     def cookies_to_token(cookies_string):
-        """Convert cookies to access token"""
+        """Convert cookies to access token using Facebook's official method"""
         try:
-            csrf_token = CookieToTokenConverter.extract_csrf_token(cookies_string)
-            if not csrf_token:
-                return {'success': False, 'error': 'No c_user found in cookies'}
+            user_id = CookieToTokenConverter.extract_user_id(cookies_string)
+            xs_token = CookieToTokenConverter.extract_xs_token(cookies_string)
             
-            # Parse cookies into dict
-            cookies_dict = {}
-            for cookie in cookies_string.split(';'):
-                if '=' in cookie:
-                    key, value = cookie.strip().split('=', 1)
-                    cookies_dict[key] = value
+            if not user_id or not xs_token:
+                return {'success': False, 'error': 'Missing c_user or xs cookie'}
             
-            # Use Facebook's token generation endpoint
-            url = "https://business.facebook.com/business_locations"
-            headers = {
-                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'accept-language': 'en-US,en;q=0.9',
-                'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Windows"',
-                'upgrade-insecure-requests': '1'
+            # Method 1: Direct token generation using Facebook's API
+            url = "https://graph.facebook.com/oauth/access_token"
+            params = {
+                'client_id': '124024574287414',
+                'client_secret': '908f302269b3c6f4eec4a8d5c90b1b5f',
+                'grant_type': 'fb_attenuate_token',
+                'fb_exchange_token': f'{user_id}|{xs_token}'
             }
             
-            session = requests.Session()
-            for key, value in cookies_dict.items():
-                session.cookies.set(key, value)
+            response = requests.get(url, params=params)
             
-            response = session.get(url, headers=headers, allow_redirects=True)
+            if response.status_code == 200:
+                data = response.json()
+                if 'access_token' in data:
+                    return {
+                        'success': True,
+                        'access_token': data['access_token'],
+                        'user_id': user_id,
+                        'method': 'graph_api'
+                    }
             
-            # Try to extract token from page
-            import re
-            token_patterns = [
-                r'EAAG[\w]{10,}',  # EAAA token pattern
-                r'accessToken["\']\s*:\s*["\']([^"\']+)["\']',
-                r'"access_token"\s*:\s*"([^"]+)"'
-            ]
+            # Method 2: Alternative method
+            url2 = "https://api.facebook.com/restserver.php"
+            data2 = {
+                'access_token': f'{user_id}|{xs_token}',
+                'format': 'json',
+                'method': 'auth.getSessionForApp',
+                'new_app_id': '350685531728',
+                'generate_session_cookies': '1'
+            }
             
-            for pattern in token_patterns:
-                matches = re.findall(pattern, response.text)
-                if matches:
-                    token = matches[0]
-                    if token.startswith('EAAG'):
-                        return {
-                            'success': True,
-                            'access_token': token,
-                            'csrf_token': csrf_token,
-                            'cookies': cookies_dict
-                        }
+            response2 = requests.post(url2, data=data2)
+            if response2.status_code == 200:
+                data2_json = response2.json()
+                if 'access_token' in data2_json:
+                    return {
+                        'success': True,
+                        'access_token': data2_json['access_token'],
+                        'user_id': user_id,
+                        'method': 'rest_api'
+                    }
             
-            return {'success': False, 'error': 'Token not found in response'}
+            # Method 3: Mobile API method
+            url3 = "https://b-graph.facebook.com/auth/convert_token"
+            params3 = {
+                'access_token': '350685531728|62f8ce9f74b12f84c123cc23437a4a32',
+                'client_id': '350685531728',
+                'client_secret': '62f8ce9f74b12f84c123cc23437a4a32',
+                'fb_exchange_token': f'{user_id}|{xs_token}',
+                'format': 'json'
+            }
+            
+            response3 = requests.get(url3, params=params3)
+            if response3.status_code == 200:
+                data3 = response3.json()
+                if 'access_token' in data3:
+                    return {
+                        'success': True,
+                        'access_token': data3['access_token'],
+                        'user_id': user_id,
+                        'method': 'mobile_api'
+                    }
+            
+            return {'success': False, 'error': 'All conversion methods failed'}
             
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            return {'success': False, 'error': f'Conversion error: {str(e)}'}
 
 
 class AccountInfoFetcher:
@@ -585,8 +617,7 @@ if __name__ == "__main__":
         loading_animation(2)
         
         # Convert cookies to token
-        converter = CookieToTokenConverter()
-        token_result = converter.cookies_to_token(cookies_input)
+        token_result = CookieToTokenConverter.cookies_to_token(cookies_input)
         
         if not token_result['success']:
             print(RED + "\n" + "═" * 62)
@@ -600,6 +631,17 @@ if __name__ == "__main__":
         original_token = token_result['access_token']
         original_prefix = FacebookAppTokens.extract_token_prefix(original_token)
         
+        # Parse cookies into proper format
+        cookies_dict = {}
+        cookies_list = []
+        for cookie in cookies_input.split(';'):
+            cookie = cookie.strip()
+            if '=' in cookie:
+                key, value = cookie.split('=', 1)
+                cookies_dict[key] = value
+                cookies_list.append(f"{key}={value}")
+        cookies_string = '; '.join(cookies_list)
+        
         # Create base result structure
         result = {
             'success': True,
@@ -608,22 +650,61 @@ if __name__ == "__main__":
                 'access_token': original_token
             },
             'cookies': {
-                'dict': token_result.get('cookies', {}),
-                'string': cookies_input
+                'dict': cookies_dict,
+                'string': cookies_string
             },
-            'from_cookies': True
+            'from_cookies': True,
+            'user_id': token_result.get('user_id')
         }
         
         # Convert to all other tokens
         print(CYAN + "[*] GENERATING ALL TOKENS FROM COOKIES..." + RESET)
-        loading_animation(2)
+        loading_animation(3)
         
+        # Create dummy login instance for token conversion
+        dummy_login = FacebookLogin(uid_phone_mail="dummy", password="dummy")
+        
+        # Get all app keys
+        all_apps = FacebookAppTokens.get_all_app_keys()
         result['converted_tokens'] = {}
-        for app_key in FacebookAppTokens.get_all_app_keys():
-            converter = FacebookLogin(uid_phone_mail="dummy", password="dummy")
-            converted = converter._convert_token(original_token, app_key)
+        
+        for app_key in all_apps:
+            converted = dummy_login._convert_token(original_token, app_key)
             if converted:
                 result['converted_tokens'][app_key] = converted
+        
+        # If no tokens were converted, try alternative method
+        if not result['converted_tokens']:
+            print(YELLOW + "[*] TRYING ALTERNATIVE CONVERSION METHOD..." + RESET)
+            loading_animation(2)
+            
+            # Try direct conversion for each app
+            for app_key in all_apps:
+                app_id = FacebookAppTokens.get_app_id(app_key)
+                if app_id:
+                    try:
+                        response = requests.post(
+                            'https://graph.facebook.com/oauth/access_token',
+                            params={
+                                'grant_type': 'fb_exchange_token',
+                                'client_id': app_id,
+                                'client_secret': '62f8ce9f74b12f84c123cc23437a4a32',
+                                'fb_exchange_token': original_token
+                            }
+                        )
+                        if response.status_code == 200:
+                            data = response.json()
+                            if 'access_token' in data:
+                                token = data['access_token']
+                                prefix = FacebookAppTokens.extract_token_prefix(token)
+                                result['converted_tokens'][app_key] = {
+                                    'token_prefix': prefix,
+                                    'access_token': token,
+                                    'app_name': FacebookAppTokens.get_app_name(app_key),
+                                    'cookies': {'dict': {}, 'string': ''}
+                                }
+                    except:
+                        pass
     
     # DISPLAY RESULTS FOR BOTH OPTIONS
     if result['success']:
@@ -653,16 +734,19 @@ if __name__ == "__main__":
         print(GREEN + "═" * 62 + RESET) 
         
         if 'converted_tokens' in result and result['converted_tokens']:
-            print(CYAN + "═" * 62)
+            print(CYAN + "\n" + "═" * 62)
             animated_print(" [ SUCCESS ] ALL TOKENS GENERATED ", color=CYAN)
             print("═" * 62 + RESET)
             
             for app_key, token_data in result['converted_tokens'].items():
                 app_name = FacebookAppTokens.get_app_name(app_key)
-                print(f"\n{YELLOW}APP: {app_key} ({app_name}){RESET}")
+                print(f"\n{YELLOW}APP: {app_key}{RESET}")
+                print(f"{YELLOW}NAME: {app_name}{RESET}")
                 print(f"{YELLOW}TYPE: {token_data['token_prefix']}{RESET}")
                 print(f"{GREEN}{token_data['access_token']}{RESET}")
                 print(GREEN + "═" * 62 + RESET)
+        else:
+            print(YELLOW + "\n[*] No additional tokens could be generated" + RESET)
         
         print("\n" + "═" * 62)
         animated_print(" COOKIES (NETSCAPE/JSON) ", color=CYAN)
